@@ -2,9 +2,6 @@
 import express from "express";
 import { Server as SocketIO } from "socket.io";
 import { createServer } from "http";
-//import path from "path";
-import { createApp } from "vue";
-import { renderToString } from "@vue/server-renderer";
 import cors from "cors";
 
 const DEFAULT_PORT = 8081;
@@ -12,38 +9,61 @@ export class Server {
   #httpServer;
   #app;
   #io;
+  users = {};
 
   constructor() {
-    //const __filename = fileURLToPath(import.meta.url);
-    //this.__dirname = dirname(__filename);
     this.activeSockets = [];
-    console.log("hoi");
 
     this.#initialize();
   }
 
+  #initialize() {
+    console.log("initializing socket server side...");
+    this.#app = express();
+    this.#app.use(cors());
+    this.#app.options("*", cors());
+    this.#httpServer = createServer(this.#app);
+    this.#io = new SocketIO(this.#httpServer, {
+      allowEIO3: true,
+      cors: {
+        origin: "http://localhost:8081",
+      },
+    });
+    this.user;
+    this.#configureApp();
+    this.#handleSocketConnection();
+    this.users = {};
+  }
+
   #handleSocketConnection() {
-    console.log("connecting socket?");
     this.#io.on("connection", (socket) => {
-      console.log("Socket connected.");
+      socket.on("set-username", (data) => {
+        if (!this.users[data.username]) {
+          this.users[data.username] = [data.usersocket];
+        }
 
-      const existingSocket = this.activeSockets.find(
-        (existingSocket) => existingSocket === socket.id
-      );
+        const existingSocket = this.activeSockets.find(
+          (existingSocket) => existingSocket === data.usersocket
+        );
 
-      if (!existingSocket) {
-        this.activeSockets.push(socket.id);
+        if (!existingSocket) {
+          this.activeSockets.push(data.usersocket);
 
-        socket.emit("update-user-list", {
-          users: this.activeSockets.filter(
-            (existingSocket) => existingSocket !== socket.id
-          ),
-        });
+          socket.emit("update-user-list", {
+            allUsers: this.users,
+            users: this.activeSockets.filter(
+              (existingSocket) => existingSocket !== data.usersocket
+            ),
+            userName: data.username,
+          });
 
-        socket.broadcast.emit("update-user-list", {
-          users: [socket.id],
-        });
-      }
+          socket.broadcast.emit("update-user-list", {
+            allUsers: this.users,
+            users: [data.usersocket],
+            userName: data.username,
+          });
+        }
+      });
 
       socket.on("disconnect", () => {
         this.activeSockets = this.activeSockets.filter(
@@ -71,36 +91,14 @@ export class Server {
   }
 
   listen(callback) {
-    const PORT = process.env.PORT || 8081;
     this.#httpServer.listen(DEFAULT_PORT, () => callback(DEFAULT_PORT));
   }
 
   #configureApp() {
-    //this.#app.use(express.static(path.join(this.__dirname, "../public")));
-    // this.#app.get("/", (req, res) => {
-    //   res.sendFile(__dirname + "/index.html");
-    // });
     this.#app.get("*", async (req, res) => {
       res.setHeader("Content-Type", "text/html");
       res.send("");
-
-      //res.end(html);
     });
-  }
-
-  #initialize() {
-    this.#app = express();
-    this.#app.use(cors());
-    this.#app.options("*", cors());
-    this.#httpServer = createServer(this.#app);
-    this.#io = new SocketIO(this.#httpServer, {
-      allowEIO3: true,
-      cors: {
-        origin: "http://localhost:8081",
-      },
-    });
-    this.#configureApp();
-    this.#handleSocketConnection();
   }
 }
 

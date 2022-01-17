@@ -1,45 +1,29 @@
 <template>
-  <!DOCTYPE html>
-<html lang="nl">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <!-- <script src="/socket.io/socket.io.js"></script> -->
-
-  </head>
-  <body>
-    <noscript>
-    </noscript>
-    <div id="app">
-      <div class="container">
-        <header class="header">
-            <h1 class="logo-text">
-              Cloom video call assignment
-            </h1>
-        </header>
-        <div class="content">
-          <div class="active-users" id="active-user-container">
-            <h3 class="title">Active Users:</h3>
-          </div>
-          <div class="video-chat-container">
-            <div v-if="conversing">Talking to {{connectedSocketId}}</div>
-            <h2 class="talk-info" id="talking-with-info"> 
-              Click on a user to talk
-            </h2>
-            <div class="video-container">
-              <video style="border: 1px solid red;" autoplay class="remote-video" id="remote-video"></video>
-              <video style="border: 1px solid blue" autoplay muted class="local-video" id="local-video"></video>
-            </div>
+  <div class="content">
+    <div class="header">
+      <h2 class="title">Welcome {{ username }} </h2>
+      <p class="talking-to" v-if="conversing">You are now talking to {{connectedSocketId}}</p>
+    </div>
+    <div class="video-app">
+      <div class="sidebar">
+        <h3 class="sidebar-title">Active Users</h3>
+        <p class="talk-info" id="talking-with-info"> 
+          (Click on a user to talk)
+        </p>
+        <div class="active-users" id="active-user-container">
+        </div>
+      </div>
+      <div class="video-chat">
+        <div class="video-chat-container">
+          <div :class="{ remoteActive: streamingRemote }" class="video-container">
+            <video autoplay class="remote-video" id="remote-video"></video>
+            <video autoplay muted class="local-video" id="local-video"></video>
+            <div class="giphy"></div>
           </div>
         </div>
       </div>
     </div>
-    <!-- built files will be auto injected -->
-
-  </body>
-</html>
-
+  </div>
 </template>
 
 
@@ -48,119 +32,45 @@
 import { io } from "socket.io-client";
 import SocketService from '../services/socket.service.js';
 
-const socket = io("localhost:8082", {
-  eventSource: { withCredentials: false },
-  extraHeaders: {
-    "my-custom-header": "abcd",
-  },
-}).connect();
-
-
-let isAlreadyCalling = false;
-// the webRTC
-const { RTCPeerConnection, RTCSessionDescription } = window;
-const peerConnection = new RTCPeerConnection();
-
-// function unselectUsersFromList() {
-//   const alreadySelectedUser = document.querySelectorAll(
-//     ".active-user.active-user--selected"
-//   );
-
-//   alreadySelectedUser.forEach((el) => {
-//     el.setAttribute("class", "active-user");
-//   });
-// }
-
-// function updateUserList(socketIds) {
-//   const activeUserContainer = document.getElementById("active-user-container");
-
-//   socketIds.forEach((socketId) => {
-//     const alreadyExistingUser = document.getElementById(socketId);
-//     if (!alreadyExistingUser) {
-//       const userContainerEl = createUserItemContainer(socketId);
-//       activeUserContainer.appendChild(userContainerEl);
-//     }
-//   });
-// }
-
-// function createUserItemContainer(socketId) {
-//   const userContainerEl = document.createElement("div");
-
-//   const usernameEl = document.createElement("p");
-
-//   userContainerEl.setAttribute("class", "active-user");
-//   userContainerEl.setAttribute("id", socketId);
-//   usernameEl.setAttribute("class", "username");
-//   usernameEl.innerHTML = `Socket: ${socketId}`;
-
-//   userContainerEl.appendChild(usernameEl);
-
-//   userContainerEl.addEventListener("click", () => {
-//     unselectUsersFromList();
-//     userContainerEl.setAttribute("class", "active-user active-user--selected");
-//     const talkingWithInfo = document.getElementById("talking-with-info");
-//     talkingWithInfo.innerHTML = `Talking with: "Socket: ${socketId}"`;
-//     callUser(socketId);
-//   });
-//   return userContainerEl;
-// }
-
-// async function callUser(socketId) {
-//   const offer = await peerConnection.createOffer();
-//   await peerConnection.setLocalDescription(new RTCSessionDescription(offer));
-
-//   socket.emit("call-user", {
-//     offer,
-//     to: socketId,
-//   });
-// }
-
-
-
-peerConnection.ontrack = function ({ streams: [stream] }) {
-  const remoteVideo = document.getElementById("remote-video");
-  if (remoteVideo) {
-    remoteVideo.srcObject = stream;
-  }
-};
-
-navigator.getUserMedia(
-  { video: true, audio: true },
-  (stream) => {
-    const localVideo = document.getElementById("local-video");
-    if (localVideo) {
-      localVideo.srcObject = stream;
-    }
-
-    stream
-      .getTracks()
-      .forEach((track) => peerConnection.addTrack(track, stream));
-  },
-  (error) => {
-    console.warn(error.message);
-  }
-);
 
 export default {
   name: 'HelloWorld',
   props: {
     msg: String
   }, 
+  data() {
+    return {
+      connectedSocketId: '',
+      username: '',
+      socketId: '',
+      streamingRemote: false,
+      users: {},
+    }
+  },
+  computed: {
+    conversing() {
+      return this.connectedSocketId.length > 0;
+    },
+    isStreamingRemote() {
+      return this.streamingRemote;
+    },
+  },
   mounted() {
-    console.log('yeeeeeu')
+
+
   },
   methods: {
     async callUser(socketId) {
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(new RTCSessionDescription(offer));
+      const offer = await this.peerConnection.createOffer();
+      await this.peerConnection.setLocalDescription(new RTCSessionDescription(offer));
 
-      socket.emit("call-user", {
+      this.socket.emit("call-user", {
         offer,
         to: socketId,
       });
     },
 
-    createUserItemContainer(socketId) {
+    createUserItemContainer(socketId, username) {
       const userContainerEl = document.createElement("div");
 
       const usernameEl = document.createElement("p");
@@ -168,27 +78,27 @@ export default {
       userContainerEl.setAttribute("class", "active-user");
       userContainerEl.setAttribute("id", socketId);
       usernameEl.setAttribute("class", "username");
-      usernameEl.innerHTML = `Socket: ${socketId}`;
+      usernameEl.innerHTML = `${username}`;
 
       userContainerEl.appendChild(usernameEl);
 
       userContainerEl.addEventListener("click", () => {
         this.unselectUsersFromList();
         userContainerEl.setAttribute("class", "active-user active-user--selected");
-        const talkingWithInfo = document.getElementById("talking-with-info");
-        talkingWithInfo.innerHTML = `Talking with: "Socket: ${socketId}"`;
+        this.connectedSocketId = username;
         this.callUser(socketId);
       });
       return userContainerEl;
     },
-    updateUserList(socketIds) {
+    updateUserList({ allUsers }) {
       const activeUserContainer = document.getElementById("active-user-container");
 
-      socketIds.forEach((socketId) => {
-        const alreadyExistingUser = document.getElementById(socketId);
-        if (!alreadyExistingUser) {
-          const userContainerEl = this.createUserItemContainer(socketId);
+      Object.keys(allUsers).map((username) => {
+        const alreadyExistingUser = document.getElementById(allUsers[username]);
+        if (!alreadyExistingUser && allUsers[username] != this.socketId) {
+          const userContainerEl = this.createUserItemContainer(allUsers[username], username);
           activeUserContainer.appendChild(userContainerEl);
+          if (!this.users[allUsers[username]]) this.users[allUsers[username]] = username;
         }
       });
     },
@@ -203,43 +113,93 @@ export default {
     }
   },
   created() {
+      this.socket = io("localhost:8082", {
+      eventSource: { withCredentials: false },
+    }).connect();
+
+
+    this.isAlreadyCalling = false;
+    // the webRTC
+    const { RTCPeerConnection, RTCSessionDescription } = window;
+    this.peerConnection = new RTCPeerConnection();
+    this.RTCPeerConnection = RTCPeerConnection;
+    this.RTCSessionDescription = RTCSessionDescription;
+
+
+
+    this.peerConnection.ontrack = function ({ streams: [stream] }) {
+      const remoteVideo = document.getElementById("remote-video");
+      if (remoteVideo) {
+        remoteVideo.srcObject = stream;
+      }
+    };
+
+    navigator.getUserMedia(
+      { video: true, audio: true },
+      (stream) => {
+        const localVideo = document.getElementById("local-video");
+        if (localVideo) {
+          localVideo.srcObject = stream;
+        }
+
+        stream
+          .getTracks()
+          .forEach((track) => this.peerConnection.addTrack(track, stream));
+      },
+      (error) => {
+        console.warn(error.message);
+      }
+    );
+
     SocketService.setupSocketConnection();  
 
-    socket.on("update-user-list", ({ users }) => {
-      this.updateUserList(users);
+    this.socket.on("update-user-list", ({ allUsers }) => {
+      this.updateUserList({ allUsers });
     });
 
-    socket.on("remove-user", ({ socketId }) => {
+    this.socket.on("remove-user", ({ socketId }) => {
       const elToRemove = document.getElementById(socketId);
-      console.log('remove: ', socketId);
 
       if (elToRemove) {
         elToRemove.remove();
       }
     });
 
-    socket.on("call-made", async (data) => {
-      await peerConnection.setRemoteDescription(
+    this.socket.on("connect", () => {
+      this.socketId = this.socket.id; 
+      const username = window.prompt('Please fill in your name');
+      this.username = username;
+      this.socket.emit("set-username", {
+        username: username,
+        usersocket: this.socket.id,
+      }); 
+    });
+
+    this.socket.on("call-made", async (data) => {
+      await this.peerConnection.setRemoteDescription(
         new RTCSessionDescription(data.offer)
       );
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(new RTCSessionDescription(answer));
-
-      socket.emit("make-answer", {
+      const answer = await this.peerConnection.createAnswer();
+      await this.peerConnection.setLocalDescription(new RTCSessionDescription(answer));
+      this.streamingRemote = true;
+      this.connectedSocketId = this.users[data.socket];
+      this.socket.emit("make-answer", {
         answer,
         to: data.socket,
       });
     });
 
-    socket.on("answer-made", async (data) => {
-      await peerConnection.setRemoteDescription(
+    this.socket.on("answer-made", async (data) => {
+      await this.peerConnection.setRemoteDescription(
         new RTCSessionDescription(data.answer)
       );
 
-      if (!isAlreadyCalling) {
+      if (!this.isAlreadyCalling) {
         this.callUser(data.socket);
-        isAlreadyCalling = true;
+        this.isAlreadyCalling = true;
       }
+
+      this.streamingRemote = true;
     });
   },
   beforeUnmount() {
@@ -249,6 +209,108 @@ export default {
 </script>
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
-<style scoped>
+<style>
+  .content {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .welcome-message {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .video-app {
+    width: 100%;
+    display: flex;
+    flex-wrap: nowrap;
+  }
+
+  .sidebar {
+    width: 20%;
+  }
+
+  .video-chat {
+    width: 80%;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: stretch;
+    flex-wrap: wrap;
+    border: 12px solid #faf6ed;
+    border-radius: 12px;
+    background-color: #faf6ed;
+  }
+
+  .video-chat-container {
+    width: 100%;
+    border-radius: 12px;
+  }
+
+  .video-container {
+    width: 100%;
+  }
+
+  .giphy {
+    width: 20%;
+  }
+
+  .remoteActive {
+    width: 100%;
+    display: flex;
+    justify-content: stretch;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .active-user {
+    padding: 12px;
+  }
+  .active-user.active-user--selected {
+    border: 1px solid #faf6ed;
+    background-color: #faf6ed;
+    border-radius: 12px 0 0 12px;
+  }
+
+  .remoteActive .remote-video {
+    width: 70%;
+  }
+
+  .remoteActive .local-video {
+    width: 30%;
+    bottom: 0;
+    right: 0;
+  }
+
+  .remote-video {
+    border-radius: 12px 0 12px 12px;
+  }
+
+  .local-video {
+    border-radius: 0 12px 12px 0;
+  }
+
+  .header {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .talking-to, .title {
+    width: 100%;
+    text-align: center;
+  }
+
+  .talking-to, .title {
+    margin-top: 0;
+  }
+
+  .sidebar-title, .talk-info {
+    margin: 0;
+    text-align: center;
+    width: 100%;
+  }
+
+
 
 </style>
