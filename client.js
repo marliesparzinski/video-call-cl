@@ -6,4 +6,4 @@ import App from "./App.vue";
 const app = createSSRApp(App);
 
 // this assumes App.vue template root element has `id="app"`
-app.mount("#app");
+//app.mount("#app");
